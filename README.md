@@ -1,8 +1,9 @@
 # Photo & Video Archive — Claude Code plugin
 
-Packages the **media-archive** workflow as an installable Claude Code plugin: back up camera
-cards, keep one date-sorted master archive, maintain a searchable SQLite catalog, and pull
-hash-verified selections to cull — all copy-only, verify-before-trust, and idempotent.
+Packages a photographer/videographer's media workflow as an installable Claude Code plugin:
+back up camera cards, keep one date-sorted master archive, maintain a searchable SQLite catalog,
+pull hash-verified selections to cull, and rank video clips by what only watching reveals — all
+copy-only, verify-before-trust, and idempotent.
 
 ## What's inside
 
@@ -12,20 +13,27 @@ photo-archive-plugin/
 │   ├── plugin.json          # plugin manifest
 │   └── marketplace.json     # single-plugin local marketplace
 ├── commands/                # slash-command entry points
-│   ├── dump.md              # /photo-archive:dump   — ingest cards/drives
-│   ├── pull.md              # /photo-archive:pull   — pull a selection to cull
-│   ├── catalog.md           # /photo-archive:catalog — plain-English catalog search
-│   └── rebuild-catalog.md   # /photo-archive:rebuild-catalog — full rescan
+│   ├── dump.md              # /photo-archive:dump            — ingest cards/drives
+│   ├── pull.md              # /photo-archive:pull            — pull a selection to cull
+│   ├── catalog.md           # /photo-archive:catalog         — plain-English catalog search
+│   ├── rebuild-catalog.md   # /photo-archive:rebuild-catalog — full rescan
+│   └── rate-video.md        # /photo-archive:rate-video      — rank clips by motion via Gemini
 └── skills/
-    └── media-archive/       # the skill + bundled scripts (auto-invoked by description)
+    ├── media-archive/       # ingest · catalog · pull/cull (auto-invoked by description)
+    │   ├── SKILL.md
+    │   ├── references/catalog.md
+    │   └── scripts/{media-ingest,pull-selection,move-keepers,build-catalog}.py
+    └── gemini-video-rater/  # rank/filter clips by on-screen motion Gemini watches
         ├── SKILL.md
-        ├── references/catalog.md
-        └── scripts/{media-ingest,pull-selection,move-keepers,build-catalog}.py
+        └── scripts/{gemini-rate,gemini-segment,stabilize}.py
 ```
 
-The **skill** triggers automatically from natural language ("back up these cards", "what
-landscapes do I have near Moab", "pull my best drone clips to T9"). The **commands** are
-deterministic entry points for the same actions.
+The **skills** trigger automatically from natural language ("back up these cards", "what
+landscapes do I have near Moab", "which of these flyovers are steadiest"). The **commands** are
+deterministic entry points for the same actions. The two skills pair: query the catalog to a
+candidate set, then have Gemini rate the clips — facts narrow, Gemini judges what's on screen.
+
+`gemini-video-rater` needs `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `ffmpeg`, and `google-genai`.
 
 ## Install (local)
 

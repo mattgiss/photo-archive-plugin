@@ -1,0 +1,20 @@
+{
+  "skill_name": "gemini-video-rater",
+  "notes": "Tests that the skill correctly offloads MOTION/temporal judgment to Gemini and returns a usable ranking. Baseline (no skill) typically can't judge motion — it extracts frames and guesses, or punts. Fixtures live in /tmp/gvr-fixtures (a steady scenic flyover + a shaky/dynamic clip + an orbit/work clip). Requires GEMINI_API_KEY (or key file) + ffmpeg + google-genai.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "rank-by-steadiness",
+      "prompt": "I've got a handful of drone clips in /tmp/gvr-fixtures and I'm making a calm meditation video. Which ones are the smoothest, steadiest flyovers? Rank them for me.",
+      "expected_output": "Each clip is compressed to a small preview and sent to Gemini, which WATCHES it and returns a per-clip rating. A ranked list is produced (highest steadiness/fit first), with the genuinely steady scenic flyover ranked above the shaky/FPV clip and the orbit/work clip. The ranking is based on observed motion, not just filename/metadata. A gemini_ratings.json is written.",
+      "files": ["/tmp/gvr-fixtures"]
+    },
+    {
+      "id": 1,
+      "name": "content-find",
+      "prompt": "Out of the clips in /tmp/gvr-fixtures, which ones are actual aerial landscape footage (mountains/desert/forest from above) versus ground-level or close-up stuff? I only want the aerial landscape ones.",
+      "expected_output": "Gemini watches each clip and classifies content; the response correctly separates aerial landscape clips from non-aerial ones, based on what's visibly on screen (not metadata guesses).",
+      "files": ["/tmp/gvr-fixtures"]
+    }
+  ]
+}
