@@ -1,0 +1,9 @@
+{
+  "name": "photo-archive",
+  "displayName": "Photo & Video Archive",
+  "version": "1.0.0",
+  "description": "Back up, sort, catalog, and pull from a personal photo/video master archive — copy-only, hash-verified, and searchable through a SQLite catalog. Wraps the media-archive skill and its ingest/pull/catalog scripts.",
+  "author": { "name": "Matthew Gissentanna", "email": "matt@gissentanna.com" },
+  "keywords": ["photography", "video", "archive", "exiftool", "drone", "backup", "catalog", "sqlite"],
+  "license": "MIT"
+}

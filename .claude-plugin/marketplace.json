@@ -1,0 +1,14 @@
+{
+  "name": "gissentanna-local",
+  "owner": { "name": "Matthew Gissentanna", "email": "matt@gissentanna.com" },
+  "metadata": {
+    "description": "Matthew Gissentanna's local Claude Code plugins."
+  },
+  "plugins": [
+    {
+      "name": "photo-archive",
+      "source": "./",
+      "description": "Personal photo/video master archive — ingest cards/drives, keep a SQLite catalog current, and pull hash-verified selections to cull."
+    }
+  ]
+}

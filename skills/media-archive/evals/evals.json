@@ -1,0 +1,27 @@
+{
+  "skill_name": "media-archive",
+  "notes": "Each run should create a FRESH empty archive + catalog inside its own output dir (the harness specifies the path). Sources under /tmp/ma-fixtures must never be modified.",
+  "evals": [
+    {
+      "id": 0,
+      "name": "card-dump-basic",
+      "prompt": "I just got back from a shoot and plugged in my SD card — it's mounted at /tmp/ma-fixtures/CARD1. Back it up into my photo/video archive (use a fresh empty archive folder and a new catalog db). I want it safe and sorted.",
+      "expected_output": "All photos/videos copied (not moved) from the card, sorted into PhotoArchive/Photos/YYYY/YYYY-MM-DD and VideoArchive/YYYY/YYYY-MM-DD by capture date, each copy hash-verified. A SQLite catalog is created/updated. The card at /tmp/ma-fixtures/CARD1 is untouched (still has all original files). Re-running would skip everything as already backed up.",
+      "files": ["/tmp/ma-fixtures/CARD1"]
+    },
+    {
+      "id": 1,
+      "name": "mixed-drive-structured-data",
+      "prompt": "Copy the photos and videos off this old drive into my archive — it's at /tmp/ma-fixtures/DRIVE2. Heads up, there's some loose shots on it, plus a Lightroom catalog and a DJI drone-mapping flight folder. Use a fresh archive + catalog.",
+      "expected_output": "The 2 loose photos are date-sorted into the archive. CRITICALLY: the Lightroom catalog (the folder containing MyLightroom.lrcat) is NOT split up by date — it stays intact as a folder. The DJI RTK mapping flight folder (DJI_202507130842_001, which holds .MRK/.RTK/.OBS/.NAV files plus DJI images) is NOT split — the images and their RTK files stay together in the flight folder (moved/kept intact, not date-scattered). Source untouched.",
+      "files": ["/tmp/ma-fixtures/DRIVE2"]
+    },
+    {
+      "id": 2,
+      "name": "drone-vs-osmo",
+      "prompt": "Ingest the two files on this card (/tmp/ma-fixtures/CARD3) into a fresh archive + catalog, then tell me which one is actual drone footage and which is handheld — I only care about tracking the real drone stuff. Both have DJI filenames so don't just go by the name.",
+      "expected_output": "Both files ingested and cataloged. The DJI_…OsmoPocket3 .MP4 is correctly identified as HANDHELD (is_drone=0). The L3D-100c .DNG (RelativeAltitude ~80m, an airborne Mavic) is correctly identified as DRONE (is_drone=1). The reasoning is based on camera metadata (Encoder/model/altitude), NOT the DJI_ filename which both share.",
+      "files": ["/tmp/ma-fixtures/CARD3"]
+    }
+  ]
+}
