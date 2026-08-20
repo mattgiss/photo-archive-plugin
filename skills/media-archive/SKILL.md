@@ -8,8 +8,10 @@ description: >-
   landscape prints", "pull drone flyover clips") to cull. Trigger even if the user
   doesn't say "archive" — e.g. "back up these cards", "get this footage off my SD",
   "move my Pictures to the G-drive", "what landscapes do I have near Moab", "copy my
-  best drone shots to T9". The archive is the master; this skill keeps it clean,
-  verified, and searchable without ever rescanning the whole drive.
+  best drone shots to T9". Also use it to set up an **automatic / scheduled card-dump**
+  — a watch folder that auto-sorts on a timer (e.g. on an always-on Mac mini server) —
+  and to make ingest jobs survive flaky external drives. The archive is the master; this
+  skill keeps it clean, verified, and searchable without ever rescanning the whole drive.
 ---
 
 # Media Archive
@@ -90,6 +92,18 @@ Only rebuild from scratch (`build-catalog.py`) if the catalog is lost or badly o
 **6. The archive drive should be APFS.** exFAT can't hold files over 4 GB — that silently breaks
 4K video. Flag this if the user points the archive at an exFAT volume.
 
+**7. External drives drop — make every job survivable.** On an always-on server the archive
+(spinning HDD) and the working SSD can spin down, sleep, or briefly disconnect mid-job — and a
+multi-minute 4K encode or a big copy written *straight to that drive* dies the instant it does
+(hard-won: five stabilization runs were killed this way when T9 dropped). Defend against it:
+(a) **preflight** — before any job, confirm the volumes are mounted (`mount | grep -q "/Volumes/T9"`)
+and abort with a clear message rather than half-writing; (b) **don't write long jobs straight to a
+flaky external** — render/transcode to local disk, then copy the finished file across in one pass;
+(c) on a server keep system + disk sleep off (`sudo pmset -a sleep 0 disksleep 0`) and wrap long runs
+in `caffeinate -i`; (d) prefer **resumable** copies (`rsync --partial --append-verify`) so a blip
+resumes instead of restarting. Because everything is already copy-only + hash-verified + idempotent
+(rule 4), a killed job is always safe to just re-run — design for that, don't fear it.
+
 ## Finding things — query the catalog
 The catalog answers "what do I have" instantly. See `references/catalog.md` for the full schema and
 a query cookbook. Quick examples:
@@ -106,6 +120,20 @@ Metadata narrows the field; it cannot judge a photo. When the user wants the "be
 (`sips -s format jpeg -Z 1500 SRC --out OUT.jpg`, works on RAW) → view them → curate. Hold results to
 the user's gold standard if one exists (`SELECT * FROM media WHERE tag='gold-standard'`). For video,
 "steady flyover" vs "orbit/work footage" is a visual call — sample frames or scrub, don't trust tags.
+
+## Automated dump system (server / watch folder)
+For an always-on setup (e.g. a Mac mini server) the manual "dump cards" step becomes hands-off:
+- A **landing zone** on the fast working drive — e.g. `/Volumes/T9/_INGEST/` — is where new footage
+  arrives, whether from a card reader or a **phone writing over a LAN share** (macOS File Sharing).
+- A **scheduled job** (macOS `launchd`) periodically runs `media-ingest.py /Volumes/T9/_INGEST`,
+  which date-sorts + hash-verifies everything into the archive, carries sidecars, updates the
+  catalog, and — **only after a clean ✅** — clears the landing zone so it's ready for the next dump.
+- Make it **self-healing** (so it "doesn't abend"): log each run to `~/photos/logs/`, guard with the
+  rule-7 preflight (skip cleanly if a drive is absent instead of erroring), and emit a daily health
+  line so a silent failure is visible. `launchd` `StartCalendarInterval` schedules it; `KeepAlive`
+  restarts it. Cloud overflow (e.g. `rclone` to a remote) can be a later stage that pushes cold media
+  off the local drives to free space.
+The engine is the same `media-ingest.py` — automation just feeds it on a timer instead of by hand.
 
 ## Setup
 ```bash
