@@ -2,8 +2,9 @@
 
 Packages a photographer/videographer's media workflow as an installable Claude Code plugin:
 back up camera cards, keep one date-sorted master archive, maintain a searchable SQLite catalog,
-pull hash-verified selections to cull, and rank video clips by what only watching reveals — all
-copy-only, verify-before-trust, and idempotent.
+search it thematically by what's actually in the frame (Gemini-tagged themes + captions with
+full-text search and browsable galleries), pull hash-verified selections to cull, and rank video
+clips by what only watching reveals — all copy-only, verify-before-trust, and idempotent.
 
 ## What's inside
 
@@ -16,24 +17,35 @@ photo-archive-plugin/
 │   ├── dump.md              # /photo-archive:dump            — ingest cards/drives
 │   ├── pull.md              # /photo-archive:pull            — pull a selection to cull
 │   ├── catalog.md           # /photo-archive:catalog         — plain-English catalog search
+│   ├── themes.md            # /photo-archive:themes          — thematic search & browse (what's IN the frame)
 │   ├── rebuild-catalog.md   # /photo-archive:rebuild-catalog — full rescan
 │   └── rate-video.md        # /photo-archive:rate-video      — rank clips by motion via Gemini
 └── skills/
-    ├── media-archive/       # ingest · catalog · pull/cull (auto-invoked by description)
+    ├── media-archive/       # ingest · catalog · thematic search · pull/cull (auto-invoked)
     │   ├── SKILL.md
     │   ├── references/catalog.md
-    │   └── scripts/{media-ingest,pull-selection,move-keepers,build-catalog}.py
+    │   └── scripts/{media-ingest,pull-selection,move-keepers,build-catalog,theme-index,theme-gallery}.py
     └── gemini-video-rater/  # rank/filter clips by on-screen motion Gemini watches
         ├── SKILL.md
         └── scripts/{gemini-rate,gemini-segment,stabilize}.py
 ```
 
 The **skills** trigger automatically from natural language ("back up these cards", "what
-landscapes do I have near Moab", "which of these flyovers are steadiest"). The **commands** are
-deterministic entry points for the same actions. The two skills pair: query the catalog to a
-candidate set, then have Gemini rate the clips — facts narrow, Gemini judges what's on screen.
+landscapes do I have near Moab", "show me sunsets over water", "which of these flyovers are
+steadiest"). The **commands** are deterministic entry points for the same actions. The two skills
+pair: query the catalog to a candidate set, then have Gemini rate the clips — facts narrow,
+Gemini judges what's on screen.
 
-`gemini-video-rater` needs `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `ffmpeg`, and `google-genai`.
+**Thematic search** adds a content layer to the catalog: `theme-index.py` renders small local
+previews (RAW-capable via `sips`; sampled frames for video) and has Gemini tag each file with
+lowercase themes (`sunset`, `beach`, `aerial`, …) plus a one-line caption, stored in a `themes`
+table with an FTS5 full-text index in the same SQLite DB. Indexing is idempotent and resumable —
+after a card dump only the new files cost anything. Search it with `/photo-archive:themes`
+("beach days 2024"), or browse everything as an HTML contact-sheet gallery grouped by theme
+(`theme-gallery.py --open`).
+
+`gemini-video-rater` and `theme-index.py` need `GEMINI_API_KEY` (or `GOOGLE_API_KEY`), `ffmpeg`,
+and `google-genai`.
 
 ## Install (local)
 
@@ -49,7 +61,7 @@ candidate set, then have Gemini rate the clips — facts narrow, Gemini judges w
 ```
 
 Then use `/photo-archive:dump`, `/photo-archive:pull`, `/photo-archive:catalog`,
-`/photo-archive:rebuild-catalog`, or just talk to it in plain English.
+`/photo-archive:themes`, `/photo-archive:rebuild-catalog`, or just talk to it in plain English.
 
 ### Dev / one-off (no install)
 
