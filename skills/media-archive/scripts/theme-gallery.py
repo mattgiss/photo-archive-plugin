@@ -74,6 +74,9 @@ def main():
     ap.add_argument("--open", action="store_true", help="open the page when done")
     a = ap.parse_args()
 
+    if not os.path.exists(a.catalog):
+        sys.exit(f"No catalog at {a.catalog} — build it first (build-catalog.py), or point "
+                 f"--catalog / $MEDIA_CATALOG at where it lives.")
     con = sqlite3.connect(a.catalog)
     if not con.execute("SELECT name FROM sqlite_master WHERE name='themes'").fetchone() or \
        not con.execute("SELECT COUNT(*) FROM themes").fetchone()[0]:

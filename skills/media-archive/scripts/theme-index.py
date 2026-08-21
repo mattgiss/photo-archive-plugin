@@ -140,6 +140,9 @@ def main():
     ap.add_argument("--dry-run", action="store_true")
     a = ap.parse_args()
 
+    if not os.path.exists(a.catalog):
+        sys.exit(f"No catalog at {a.catalog} — build it first (build-catalog.py, with the archive "
+                 f"drive mounted), or point --catalog / $MEDIA_CATALOG at where it lives.")
     con = sqlite3.connect(a.catalog)
     ensure_schema(con)
 
