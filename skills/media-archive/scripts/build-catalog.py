@@ -52,6 +52,10 @@ def main():
     ap.add_argument("--catalog", default=CATALOG)
     a=ap.parse_args()
     arch=a.archive
+    if not os.path.isdir(arch):
+        import sys; sys.exit(f"Archive not found at {arch} — is the drive mounted? "
+                             f"(--archive / $MEDIA_ARCHIVE to point elsewhere)")
+    os.makedirs(os.path.dirname(os.path.abspath(a.catalog)), exist_ok=True)
     print(f"Scanning {arch} … (this reads the whole drive — slow on multi-TB)")
 
     paths=[]
