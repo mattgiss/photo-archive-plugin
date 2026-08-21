@@ -8,7 +8,9 @@ description: >-
   landscape prints", "pull drone flyover clips") to cull. Trigger even if the user
   doesn't say "archive" — e.g. "back up these cards", "get this footage off my SD",
   "move my Pictures to the G-drive", "what landscapes do I have near Moab", "copy my
-  best drone shots to T9". Also use it to set up an **automatic / scheduled card-dump**
+  best drone shots to T9". Also covers **thematic search** — finding or browsing media by what's
+  IN the frame ("show me sunsets", "beach days with the kids", "find waterfall clips", "browse my
+  photos by theme") via a Gemini-built theme index in the same catalog. Also use it to set up an **automatic / scheduled card-dump**
   — a watch folder that auto-sorts on a timer (e.g. on an always-on Mac mini server) —
   and to make ingest jobs survive flaky external drives. The archive is the master; this
   skill keeps it clean, verified, and searchable without ever rescanning the whole drive.
@@ -42,6 +44,8 @@ rescan the drive: a SQLite catalog is the source of truth for "what do I have."
 | Build/rebuild the catalog from scratch | `scripts/build-catalog.py` |
 | Pull a selection out to a working drive to cull | `scripts/pull-selection.py --preset … --dest /Volumes/T9` |
 | Move culled keepers to the project SSD | `scripts/move-keepers.py --from … --to …` |
+| Theme-index media (Gemini tags what's in each frame) | `scripts/theme-index.py [--kind photo] [--limit N]` |
+| Browse/search themes as an HTML contact sheet | `scripts/theme-gallery.py [--theme sunset \| --query "…"] --open` |
 
 Run with `--dry-run` first when the user is unsure. `media-ingest.py` reads dates with exiftool,
 copies each file, **re-hashes the copy to verify**, skips anything already in the archive
@@ -113,6 +117,22 @@ sqlite3 "$MEDIA_CATALOG" "SELECT path,model,megapixels FROM media
 sqlite3 "$MEDIA_CATALOG" "SELECT path,duration FROM media
   WHERE kind='video' AND is_drone=1 AND duration<600 ORDER BY duration;"   -- short drone clips
 ```
+
+## Thematic search — find media by what's in the frame
+The `media` table can't answer "show me sunsets". `theme-index.py` has Gemini look at each
+photo (batched previews) and video (sampled frames) and writes lowercase theme tags + a one-line
+caption to a `themes` table with an FTS5 index — same DB, idempotent, resumable, and after a new
+dump only the delta needs indexing (run it as a post-ingest step). Needs `GEMINI_API_KEY` +
+`google-genai`; previews render locally via `sips`/`ffmpeg`, so originals never upload.
+```bash
+sqlite3 "$MEDIA_CATALOG" "SELECT m.path, t.caption FROM themes_fts f
+  JOIN themes t ON t.path=f.path JOIN media m ON m.path=f.path
+  WHERE themes_fts MATCH '(sunset OR \"golden-hour\") AND beach' AND m.kind='photo' ORDER BY rank"
+python3 scripts/theme-gallery.py --query 'sunset OR "golden-hour"' --open  # see it, not just list it
+```
+Expand the user's words into `OR` synonyms, combine freely with factual columns (year, `is_drone`,
+GPS), and report coverage — un-indexed files are invisible to MATCH, so say "N of M indexed" when
+the index is partial. Full schema + cookbook: `references/catalog.md`.
 
 ## Curating "best" / licensable selections
 Metadata narrows the field; it cannot judge a photo. When the user wants the "best" prints or the

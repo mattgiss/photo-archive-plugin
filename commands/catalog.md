@@ -16,4 +16,7 @@ Guidelines:
 - Useful columns: `path, kind, orientation, megapixels, width, height, capture_date, make, model, gps_lat, gps_lon, has_gps, duration, is_drone, tag`.
 - For "drone" requests, filter `is_drone=1` (real aircraft only — not Osmo/handheld).
 - For "prints/best/good", metadata only narrows the field — render previews with `sips -s format jpeg -Z 1500 SRC --out OUT.jpg` and actually look before recommending.
+- For **content** asks (subject/scenery: "sunsets", "beach", "the kids") the media table can't
+  help — use the theme index (`themes`/`themes_fts` tables, see `/photo-archive:themes`) and
+  join it to `media` for the factual filters.
 - Show the matching `path`s plus the columns that justify the match. Never full-rescan the drive; the catalog is the source of truth.
