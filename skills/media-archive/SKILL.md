@@ -35,6 +35,10 @@ rescan the drive: a SQLite catalog is the source of truth for "what do I have."
 - Photos → `PhotoArchive/Photos/YYYY/YYYY-MM-DD/`
 - Videos → `VideoArchive/YYYY/YYYY-MM-DD/`
 - Catalog → `$MEDIA_CATALOG` (default `~/photos/catalog/gdrive_catalog.db`)
+- Dates are the **local** day of capture (`scripts/capture_date.py`). Photos carry local time; videos store
+  QuickTime CreateDate in **UTC**, so a clip shot after 6 pm in Colorado would otherwise land in the next day's
+  folder. Videos take their day from the Sony `M01.XML`, a `DJI_YYYYMMDDHHMMSS_` file name, a zone-tagged
+  CreationDate (Apple), or CreateDate converted from UTC to this Mac's zone, in that order.
 - Bundled scripts live in `scripts/` next to this file. Requires `exiftool` (`brew install exiftool`).
 
 ## The scripts (use these — don't reinvent them)

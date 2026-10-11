@@ -7,7 +7,9 @@ normally the catalog stays current via media-ingest.py; a full rescan of a big d
 Usage:  python3 build-catalog.py [--archive /Volumes/...] [--catalog ~/photos/catalog/gdrive_catalog.db]
 Requires: exiftool
 """
-import os, re, csv, sqlite3, subprocess, argparse, tempfile
+import os, re, csv, sqlite3, subprocess, argparse, tempfile, sys
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from capture_date import EXIF_ARGS, local_date   # noqa: E402
 
 ARCHIVE = os.environ.get("MEDIA_ARCHIVE", "/Volumes/G-DRIVE PROJECT")
 CATALOG = os.environ.get("MEDIA_CATALOG", os.path.expanduser("~/photos/catalog/gdrive_catalog.db"))
@@ -68,9 +70,9 @@ def main():
     print(f"  {len(paths)} media files found. Reading metadata with exiftool…")
 
     lf=tempfile.NamedTemporaryFile('w',delete=False,suffix='.txt'); lf.write("\n".join(paths)); lf.close()
-    cmd=[EXIFTOOL,"-csv","-n","-d","%Y-%m-%d",
+    cmd=[EXIFTOOL,"-csv","-n",*EXIF_ARGS,
          "-FileType","-FileSize#","-ImageWidth","-ImageHeight","-Megapixels","-Orientation",
-         "-CreateDate","-DateTimeOriginal","-Make","-Model","-LensModel",
+         "-Make","-Model","-LensModel",
          "-GPSLatitude","-GPSLongitude","-Duration","-VideoFrameRate",
          "-Encoder","-RelativeAltitude","-@",lf.name]
     out=subprocess.run(cmd,capture_output=True,text=True).stdout
@@ -90,7 +92,7 @@ def main():
         kind='photo' if e in PHOTO else ('video' if e in VIDEO else 'other')
         w,h,o=i(m.get('ImageWidth')),i(m.get('ImageHeight')),i(m.get('Orientation'))
         make,model=(m.get('Make') or '').strip(),(m.get('Model') or '').strip()
-        d=(m.get('DateTimeOriginal') or m.get('CreateDate') or '')[:10].replace(':','-') or None
+        d=local_date(p, m, kind, mtime_fallback=False)     # videos: local day, not QuickTime's UTC one
         lat,lon=f(m.get('GPSLatitude')),f(m.get('GPSLongitude'))
         rows.append((p,rel,loc, loc if loc in ('PhotoArchive','VideoArchive') else 'straggler',
             os.path.basename(p),e,kind, i(m.get('FileSize')) or (os.path.getsize(p) if os.path.exists(p) else None),
