@@ -24,6 +24,8 @@ USAGE
 Requires: exiftool  (brew install exiftool)
 """
 import os, sys, csv, time, hashlib, shutil, sqlite3, subprocess, argparse, re, glob
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from capture_date import EXIF_ARGS, local_date   # noqa: E402  (videos: local day, not QuickTime's UTC one)
 
 # ---------- config (override with env vars or flags) ----------
 ARCHIVE = os.environ.get("MEDIA_ARCHIVE", "/Volumes/G-DRIVE PROJECT")
@@ -134,9 +136,9 @@ def read_meta(paths, logfile):
     if not paths: return {}
     listfile = "/tmp/_ingest_list.txt"
     open(listfile,'w').write("\n".join(paths))
-    cmd = [EXIFTOOL,"-csv","-n","-d","%Y-%m-%d",
+    cmd = [EXIFTOOL,"-csv","-n",*EXIF_ARGS,
            "-FileType","-FileSize#","-ImageWidth","-ImageHeight","-Megapixels","-Orientation",
-           "-CreateDate","-DateTimeOriginal","-Make","-Model","-LensModel",
+           "-Make","-Model","-LensModel",
            "-GPSLatitude","-GPSLongitude","-Duration","-VideoFrameRate",
            "-Encoder","-RelativeAltitude","-@",listfile]
     r = subprocess.run(cmd, capture_output=True, text=True)
@@ -146,11 +148,22 @@ def read_meta(paths, logfile):
     return meta
 
 def date_of(path, m):
-    d = (m.get('DateTimeOriginal') or m.get('CreateDate') or '')[:10].replace(':','-')
-    if not d or len(d)<10 or not d[:4].isdigit() or d[:4]=='0000':
-        try: d = time.strftime("%Y-%m-%d", time.localtime(os.path.getmtime(path)))
-        except: d = None
-    return d
+    """Local capture date (YYYY-MM-DD). Videos: Sony XML / DJI file name / zone-tagged date / UTC converted
+    to local — see capture_date.py. (QuickTime CreateDate alone is UTC: evening clips landed a day late.)"""
+    return local_date(path, m, 'photo' if ext(path) in PHOTO_EXT else 'video')
+
+def archived_elsewhere(con, p, sz):
+    """An identical copy already in the archive under another folder (e.g. filed by an older date rule), found
+    through the catalog: same name and size, same bytes. Keeps re-dumps from duplicating it."""
+    if con is None: return None
+    try:
+        rows = con.execute("SELECT path FROM media WHERE filename=? AND size=?", (os.path.basename(p), sz)).fetchall()
+    except sqlite3.Error:
+        return None
+    cands = [q for (q,) in rows if os.path.exists(q)]
+    if not cands: return None
+    hp = H(p)
+    return next((q for q in cands if H(q)==hp), None)
 
 def orient(w,h,o):
     if not w or not h: return None
@@ -223,8 +236,9 @@ def main():
 
     PA = f"{ARCHIVE}/PhotoArchive/Photos"; VA = f"{ARCHIVE}/VideoArchive"
     con = None
-    if not a.dry_run and os.path.exists(os.path.dirname(a.catalog) or '.'):
-        con = sqlite3.connect(a.catalog); ensure_catalog(con)
+    if os.path.exists(a.catalog) or (not a.dry_run and os.path.exists(os.path.dirname(a.catalog) or '.')):
+        con = sqlite3.connect(a.catalog)
+        if not a.dry_run: ensure_catalog(con)          # dry runs only read it (to spot copies filed elsewhere)
 
     c = dict(copied=0, bytes=0, skipped=0, renamed=0, fail=0, sidecars=0)
     new_rows = []
@@ -241,6 +255,11 @@ def main():
                 c['skipped']+=1                                # already securely backed up;
                 if not a.dry_run: c['sidecars'] += carry_sidecars(p, dst, logfile)   # re-runs fill in sidecars
                 continue
+            other = archived_elsewhere(con, p, sz)
+            if other:                                          # already backed up, filed under another folder
+                c['skipped']+=1
+                if not a.dry_run: c['sidecars'] += carry_sidecars(p, other, logfile)
+                continue
             if a.dry_run:
                 c['copied']+=1; c['bytes']+=sz; continue
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -250,14 +269,14 @@ def main():
                 os.remove(dst); c['fail']+=1; log(f"VERIFY FAILED: {p}", logfile); continue
             c['copied']+=1; c['bytes']+=sz
             c['sidecars'] += carry_sidecars(p, dst, logfile)   # xmp/aae/lrf/srt, Sony M01.XML
-            if con is not None:
+            if con is not None and not a.dry_run:
                 new_rows.append(catalog_row(dst, kind, m, d))
         except Exception as e:
             c['fail']+=1; log(f"ERROR {p}: {e}", logfile)
         if (c['copied']+c['skipped']) % 100 == 0:
             log(f"  …{c['copied']} copied, {c['skipped']} already backed up", logfile)
 
-    if con is not None and new_rows:
+    if con is not None and new_rows and not a.dry_run:
         # upsert: a re-catalogued file keeps its extra columns (INSERT OR REPLACE would wipe its `tag`)
         con.executemany(f"INSERT INTO media ({','.join(COLS)}) VALUES ({','.join('?'*len(COLS))}) "
                         "ON CONFLICT(path) DO UPDATE SET " + ",".join(f"{k}=excluded.{k}" for k in COLS[1:]), new_rows)
@@ -270,7 +289,7 @@ def main():
     log(f"Renamed (clash)   : {c['renamed']}", logfile)
     log(f"Sidecars copied   : {c['sidecars']}", logfile)
     log(f"Failed            : {c['fail']}", logfile)
-    log(f"Catalog updated   : {len(new_rows)} new entries" if con is not None else "Catalog: (skipped)", logfile)
+    log(f"Catalog updated   : {len(new_rows)} new entries" if con is not None and not a.dry_run else "Catalog: (skipped)", logfile)
     log(f"Cards/sources were NOT modified. Log: {logfile}", logfile)
     if c['fail']: sys.exit(2)
 
