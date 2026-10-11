@@ -68,7 +68,10 @@ If you must consolidate these, move them folder-intact into a `_Projects/` or `_
 do **not** feed them to the date-sorter.
 
 **2. Sidecars travel with their media.** When a media file moves, its sidecars move with it:
-`.xmp` (Lightroom edits), `.aae` (Apple edits), `.lrf` (DJI low-res proxy), `.srt` (telemetry/subs).
+`.xmp` (Lightroom edits), `.aae` (Apple edits), `.lrf` (DJI low-res proxy), `.srt` (telemetry/subs),
+and Sony's `<clip>M01.XML` (`C0001.MP4` → `C0001M01.XML`: start time with zone, frame rate, gamma/gamut —
+what tells S-Log3 from S-Cinetone). Sidecar copies are hash-verified like the media, and a re-run fills in
+any sidecar missing next to an already-archived file.
 For drone **mapping** data the "sidecars" are the per-flight `.MRK/.RTK/.OBS/.NAV/.PBK` — but those
 belong to the *flight folder*, so per rule 1 you keep the whole flight folder together rather than
 chasing individual files.

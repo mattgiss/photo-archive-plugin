@@ -71,6 +71,38 @@ def uniq(dst):
         if not os.path.exists(c): return c
         i+=1
 
+def sidecars(p):
+    """(sidecar path, suffix for the archived stem) for every sidecar of media file p. A Sony clip's metadata
+    (start time with zone, gamma, gamut) is <stem>M01.XML: C0001.MP4 -> C0001M01.XML."""
+    stem = p.rsplit('.',1)[0]
+    out = [(sc, '.' + ext(sc)) for sc in (stem+'.xmp', stem+'.XMP', p+'.xmp', stem+'.aae', stem+'.AAE',
+                                          stem+'.lrf', stem+'.LRF', stem+'.srt', stem+'.SRT')]
+    out += [(stem + s, s) for s in ('M01.XML', 'M01.xml')]
+    seen, keep = set(), []
+    for sc, suf in out:
+        if not os.path.exists(sc): continue
+        st = os.stat(sc)
+        if (st.st_dev, st.st_ino) in seen: continue   # case-insensitive disks: X.lrf and X.LRF are one file
+        seen.add((st.st_dev, st.st_ino)); keep.append((sc, suf))
+    return keep
+
+def carry_sidecars(p, dst, logfile):
+    """Copy p's sidecars next to its archived copy dst, hash-verified; ones already there are skipped."""
+    n, dstem = 0, dst.rsplit('.',1)[0]
+    for sc, suf in sidecars(p):
+        sd = dstem + suf
+        try:
+            if os.path.exists(sd):
+                if os.path.getsize(sd)==os.path.getsize(sc) and H(sd)==H(sc): continue
+                sd = uniq(sd)
+            shutil.copy2(sc, sd)
+            if H(sd)!=H(sc):
+                os.remove(sd); log(f"SIDECAR VERIFY FAILED: {sc}", logfile); continue
+            n += 1
+        except Exception as e:
+            log(f"SIDECAR ERROR {sc}: {e}", logfile)
+    return n
+
 def detect_cards():
     # volumes to never treat as a card: the boot drive and the archive drive itself
     skip = {"/Volumes/Macintosh HD"}
@@ -146,6 +178,11 @@ def catalog_row(path, kind, m, date):
             date, (date[:4] if date else None), make, model, m.get('LensModel') or '',
             lat, lon, 1 if (lat and lon) else 0, fnum(m.get('Duration')), fnum(m.get('VideoFrameRate')), drone)
 
+# catalog_row() order. Inserts name these columns: catalogs can carry extra ones (e.g. `tag` for gold-standard picks).
+COLS = ("path", "rel", "location", "in_archive", "filename", "ext", "kind", "size", "filetype", "width", "height",
+        "megapixels", "orientation", "capture_date", "year", "make", "model", "lens", "gps_lat", "gps_lon", "has_gps",
+        "duration", "fps", "is_drone")
+
 def ensure_catalog(con):
     con.execute("""CREATE TABLE IF NOT EXISTS media(
       path TEXT PRIMARY KEY, rel TEXT, location TEXT, in_archive TEXT, filename TEXT, ext TEXT,
@@ -189,7 +226,7 @@ def main():
     if not a.dry_run and os.path.exists(os.path.dirname(a.catalog) or '.'):
         con = sqlite3.connect(a.catalog); ensure_catalog(con)
 
-    c = dict(copied=0, bytes=0, skipped=0, renamed=0, fail=0)
+    c = dict(copied=0, bytes=0, skipped=0, renamed=0, fail=0, sidecars=0)
     new_rows = []
     for p in files:
         m = meta.get(p, {})
@@ -201,7 +238,9 @@ def main():
         try:
             sz = os.path.getsize(p)
             if os.path.exists(dst) and os.path.getsize(dst)==sz and H(dst)==H(p):
-                c['skipped']+=1; continue                      # already securely backed up
+                c['skipped']+=1                                # already securely backed up;
+                if not a.dry_run: c['sidecars'] += carry_sidecars(p, dst, logfile)   # re-runs fill in sidecars
+                continue
             if a.dry_run:
                 c['copied']+=1; c['bytes']+=sz; continue
             os.makedirs(os.path.dirname(dst), exist_ok=True)
@@ -210,14 +249,7 @@ def main():
             if os.path.getsize(dst)!=sz or H(dst)!=src_hash:   # verify
                 os.remove(dst); c['fail']+=1; log(f"VERIFY FAILED: {p}", logfile); continue
             c['copied']+=1; c['bytes']+=sz
-            # carry sidecars (xmp/aae/lrf/srt…)
-            stem = p.rsplit('.',1)[0]
-            for sc in (stem+'.xmp', stem+'.XMP', p+'.xmp', stem+'.aae', stem+'.AAE',
-                       stem+'.lrf', stem+'.LRF', stem+'.srt', stem+'.SRT'):
-                if os.path.exists(sc):
-                    sd = uniq(dst.rsplit('.',1)[0] + '.' + ext(sc))
-                    try: shutil.copy2(sc, sd)
-                    except: pass
+            c['sidecars'] += carry_sidecars(p, dst, logfile)   # xmp/aae/lrf/srt, Sony M01.XML
             if con is not None:
                 new_rows.append(catalog_row(dst, kind, m, d))
         except Exception as e:
@@ -226,7 +258,9 @@ def main():
             log(f"  …{c['copied']} copied, {c['skipped']} already backed up", logfile)
 
     if con is not None and new_rows:
-        con.executemany("INSERT OR REPLACE INTO media VALUES (%s)"%",".join("?"*24), new_rows)
+        # upsert: a re-catalogued file keeps its extra columns (INSERT OR REPLACE would wipe its `tag`)
+        con.executemany(f"INSERT INTO media ({','.join(COLS)}) VALUES ({','.join('?'*len(COLS))}) "
+                        "ON CONFLICT(path) DO UPDATE SET " + ",".join(f"{k}=excluded.{k}" for k in COLS[1:]), new_rows)
         con.commit(); con.close()
 
     log("", logfile)
@@ -234,6 +268,7 @@ def main():
     log(f"Copied & verified : {c['copied']}  ({c['bytes']/1e9:.1f} GB)", logfile)
     log(f"Already backed up : {c['skipped']}  (skipped)", logfile)
     log(f"Renamed (clash)   : {c['renamed']}", logfile)
+    log(f"Sidecars copied   : {c['sidecars']}", logfile)
     log(f"Failed            : {c['fail']}", logfile)
     log(f"Catalog updated   : {len(new_rows)} new entries" if con is not None else "Catalog: (skipped)", logfile)
     log(f"Cards/sources were NOT modified. Log: {logfile}", logfile)
